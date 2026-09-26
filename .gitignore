@@ -1,0 +1,29 @@
+# Gradle / Android
+.gradle/
+build/
+app/build/
+local.properties
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# 签名密钥——绝不入库
+*.jks
+*.keystore
+
+# 构建产物（发布请走 GitHub Releases）
+*.apk
+*.aab
+
+# 本地调试日志
+build_log.txt
+test_log.txt
+test_result.txt
+crash_log.txt
+full_log.txt
+all_log.txt
