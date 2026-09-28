@@ -27,3 +27,7 @@ test_result.txt
 crash_log.txt
 full_log.txt
 all_log.txt
+push_log.txt
+tag_push.txt
+remote_check.txt
+*.txt.bak
