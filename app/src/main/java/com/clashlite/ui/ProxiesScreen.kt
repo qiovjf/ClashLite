@@ -57,8 +57,8 @@ import com.clashlite.ClashViewModel
 import com.clashlite.core.ProxyGroup
 import com.clashlite.data.ProxiesDisplay
 
-private val delayGreen = Color(0xFF4CAF50)
-private val delayOrange = Color(0xFFFFA726)
+internal val delayGreen = Color(0xFF4CAF50)
+internal val delayOrange = Color(0xFFFFA726)
 private val delayRed = Color(0xFFEF5350)
 
 private fun delayColor(ms: Int?): Color? = when {

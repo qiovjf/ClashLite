@@ -106,6 +106,28 @@ fun ProfilesScreen(vm: ClashViewModel) {
                                 Icon(Icons.Filled.Delete, "删除")
                             }
                         }
+
+                        // 订阅用量与到期（订阅提供时显示）
+                        if (profile.total > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            val used = profile.upload + profile.download
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { (used.toDouble() / profile.total).coerceIn(0.0, 1.0).toFloat() },
+                                modifier = Modifier.fillMaxWidth().height(5.dp),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "${com.clashlite.util.formatBytes(used)} / ${com.clashlite.util.formatBytes(profile.total)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (profile.expire > 0) {
+                            Text(
+                                "到期：${fmt.format(Date(profile.expire * 1000))}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
                         Row {
                             TextButton(onClick = { vm.setActiveProfile(profile.id) }) {
                                 Text(if (profile.id == settings.activeProfileId) "✓ 当前使用" else "使用此订阅")

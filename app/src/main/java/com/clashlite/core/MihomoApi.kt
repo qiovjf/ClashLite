@@ -218,4 +218,76 @@ class MihomoApi(
         val g = URLEncoder.encode(group, "UTF-8")
         put("/proxies/$g", """{"name":${kotlinx.serialization.json.JsonPrimitive(node)}}""")
     }
+
+    // ── 连接监控（v2.0）──
+
+    /** 单条活动连接 */
+    data class ConnectionItem(
+        val id: String,
+        val network: String,
+        val host: String,
+        val destination: String,
+        val rule: String,
+        val chains: String,
+        val process: String,
+        val upload: Long,
+        val download: Long,
+    )
+
+    data class ConnectionsSnapshot(
+        val uploadTotal: Long,
+        val downloadTotal: Long,
+        val items: List<ConnectionItem>,
+    )
+
+    /** 获取活动连接列表（含累计流量） */
+    suspend fun connections(): ConnectionsSnapshot = withContext(Dispatchers.IO) {
+        val root = json.parseToJsonElement(get("/connections")).jsonObject
+        val items = mutableListOf<ConnectionItem>()
+        root["connections"]?.let { el ->
+            val connArr = el as? kotlinx.serialization.json.JsonArray ?: return@let
+            connArr.forEach { c ->
+                val obj = c.jsonObject
+                val meta = obj["metadata"]?.jsonObject
+                fun s(key: String) = meta?.get(key)?.jsonPrimitive?.content ?: ""
+                fun l(key: String) = obj[key]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                items.add(
+                    ConnectionItem(
+                        id = obj["id"]?.jsonPrimitive?.content ?: "",
+                        network = s("network"),
+                        host = s("host").ifBlank { s("destinationIP") },
+                        destination = s("destinationIP") + ":" + s("destinationPort"),
+                        rule = (obj["rule"]?.jsonPrimitive?.content ?: "") +
+                            (obj["rulePayload"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.let { "/$it" } ?: ""),
+                        chains = obj["chains"]?.toString()?.removeSurrounding("[", "]")
+                            ?.split(",")?.map { it.trim().removeSurrounding("\"") }?.reversed()?.joinToString("→") ?: "",
+                        process = s("process"),
+                        upload = l("upload"),
+                        download = l("download"),
+                    )
+                )
+            }
+        }
+        ConnectionsSnapshot(
+            uploadTotal = root["uploadTotal"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+            downloadTotal = root["downloadTotal"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+            items = items,
+        )
+    }
+
+    /** 断开单条连接 */
+    suspend fun closeConnection(id: String) = withContext(Dispatchers.IO) {
+        runCatching {
+            client.newCall(Request.Builder().url("$baseUrl/connections/${URLEncoder.encode(id, "UTF-8")}").delete().build())
+                .execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+    }
+
+    /** 断开全部连接 */
+    suspend fun closeAllConnections() = withContext(Dispatchers.IO) {
+        runCatching {
+            client.newCall(Request.Builder().url("$baseUrl/connections").delete().build())
+                .execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+    }
 }

@@ -143,6 +143,12 @@ fun DashboardScreen(vm: ClashViewModel) {
 
         Spacer(Modifier.height(12.dp))
 
+        // 速率历史曲线（v2.0）
+        val history by vm.speedHistory.collectAsStateWithLifecycle()
+        SpeedChart(history)
+
+        Spacer(Modifier.height(12.dp))
+
         // IP 检测卡片
         IpCheckCard(ipCheck, running) { vm.checkExitIp() }
 
@@ -243,6 +249,71 @@ private fun flagOf(countryCode: String): String {
     return countryCode.uppercase()
         .map { String(Character.toChars(0x1F1E6 + it.code - 'A'.code)) }
         .joinToString("")
+}
+
+/** 速率历史曲线：下行实线+填充，上行细线，最多展示 120 个采样点 */
+@Composable
+private fun SpeedChart(history: List<Pair<Long, Long>>) {
+    val downColor = Color(0xFF42A5F5)
+    val upColor = Color(0xFF66BB6A)
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).background(downColor, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text("下行", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).background(upColor, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text("上行", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier.fillMaxWidth().height(88.dp),
+            ) {
+                if (history.size < 2) {
+                    // 空态：画一条基线
+                    drawLine(
+                        color = Color.Gray.copy(alpha = 0.3f),
+                        start = androidx.compose.ui.geometry.Offset(0f, size.height / 2),
+                        end = androidx.compose.ui.geometry.Offset(size.width, size.height / 2),
+                        strokeWidth = 2f,
+                    )
+                    return@Canvas
+                }
+                val maxVal = history.maxOf { maxOf(it.first, it.second) }.coerceAtLeast(1L)
+                val stepX = size.width / (history.size - 1).coerceAtLeast(1)
+                fun yOf(v: Long) = size.height - (v.toFloat() / maxVal) * (size.height * 0.9f) - 4f
+
+                // 下行面积 + 线
+                val downPath = androidx.compose.ui.graphics.Path()
+                val downFill = androidx.compose.ui.graphics.Path()
+                history.forEachIndexed { i, (_, down) ->
+                    val x = i * stepX
+                    val y = yOf(down)
+                    if (i == 0) { downPath.moveTo(x, y); downFill.moveTo(x, size.height) } else downPath.lineTo(x, y)
+                    downFill.lineTo(x, y)
+                }
+                downFill.lineTo(size.width, size.height); downFill.close()
+                drawPath(downFill, brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(downColor.copy(alpha = 0.35f), Color.Transparent)
+                ))
+                drawPath(downPath, color = downColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+
+                // 上行线
+                val upPath = androidx.compose.ui.graphics.Path()
+                history.forEachIndexed { i, (up, _) ->
+                    val x = i * stepX
+                    val y = yOf(up)
+                    if (i == 0) upPath.moveTo(x, y) else upPath.lineTo(x, y)
+                }
+                drawPath(upPath, color = upColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
+            }
+        }
+    }
 }
 
 @Composable

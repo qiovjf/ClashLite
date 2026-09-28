@@ -102,6 +102,23 @@ class ProfilesRepository(private val context: Context) {
         context.settingsDataStore.edit { it[kActive] = id }
     }
 
+    /** 订阅用量信息入库 */
+    suspend fun updateProfileTraffic(id: String, upload: Long, download: Long, total: Long, expire: Long) {
+        context.settingsDataStore.edit {
+            val list = decodeProfiles(it[kProfiles]).map {
+                if (it.id == id) it.copy(upload = upload, download = download, total = total, expire = expire) else it
+            }
+            it[kProfiles] = json.encodeToString(serializer, list)
+        }
+    }
+
+    // 订阅自动更新周期（小时；0=关闭）
+    private val kAutoUpdateHours = intPreferencesKey("auto_update_hours")
+    val autoUpdateHours: Flow<Int> = context.settingsDataStore.data.map { it[kAutoUpdateHours] ?: 0 }
+    suspend fun setAutoUpdateHours(h: Int) {
+        context.settingsDataStore.edit { it[kAutoUpdateHours] = h }
+    }
+
     suspend fun setPerAppMode(mode: PerAppMode) {
         context.settingsDataStore.edit { it[kPerAppMode] = mode.ordinal }
     }

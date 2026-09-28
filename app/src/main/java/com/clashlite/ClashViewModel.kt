@@ -97,6 +97,18 @@ class ClashViewModel(private val app: Application) : ViewModel() {
     data class IpCheck(val loading: Boolean = false, val overseas: Boolean? = null, val info: MihomoApi.IpInfo? = null)
     val ipCheck = MutableStateFlow(IpCheck())
 
+    // ── 连接监控（v2.0）──
+    data class ConnectionsState(
+        val snapshot: MihomoApi.ConnectionsSnapshot = MihomoApi.ConnectionsSnapshot(0, 0, emptyList()),
+    )
+    val connections = MutableStateFlow(ConnectionsState())
+
+    // ── 速率历史（曲线图用，最多 120 个采样点）──
+    val speedHistory = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
+
+    fun closeConnection(id: String) = viewModelScope.launch(Dispatchers.IO) { MihomoApi().closeConnection(id) }
+    fun closeAllConnections() = viewModelScope.launch(Dispatchers.IO) { MihomoApi().closeAllConnections() }
+
     fun checkExitIp() = viewModelScope.launch(Dispatchers.IO) {
         if (!VpnRuntime.running.value) {
             ipCheck.value = IpCheck(overseas = null, info = null)
@@ -121,10 +133,24 @@ class ClashViewModel(private val app: Application) : ViewModel() {
                     trafficJob = launch(Dispatchers.IO) {
                         // 连接初期内核可能尚未就绪，流断开自动重连
                         while (isActive && VpnRuntime.running.value) {
-                            runCatching { api.trafficStream { up, down -> speed.value = Speed(up, down) } }
+                            runCatching { api.trafficStream { up, down ->
+                                speed.value = Speed(up, down)
+                                // 采样进历史（曲线图用），保留最近 120 点
+                                val h = (speedHistory.value + (up to down))
+                                speedHistory.value = if (h.size > 120) h.takeLast(120) else h
+                            } }
                             speed.value = Speed(0, 0)
                             delay(1000)
                         }
+                    }
+                    // 连接监控轮询
+                    launch(Dispatchers.IO) {
+                        while (isActive && VpnRuntime.running.value) {
+                            val snap = runCatching { api.connections() }.getOrNull()
+                            if (snap != null) connections.value = ConnectionsState(snap)
+                            delay(2000)
+                        }
+                        connections.value = ConnectionsState()
                     }
                     // 连接建立后加载一次代理组 + 同步测速链接/端口
                     delay(800)
@@ -154,26 +180,50 @@ class ClashViewModel(private val app: Application) : ViewModel() {
 
     // ---------- 订阅 ----------
     fun addSubscription(url: String, name: String) = viewModelScope.launch(Dispatchers.IO) {
-        val content = withContext(Dispatchers.IO) { fetchUrl(url) } ?: return@launch
+        val fetched = com.clashlite.core.SubscriptionUpdater.fetchWithInfo(url) ?: return@launch
+        val (content, info) = fetched
         val parsed = SubscriptionParser.parse(content)
         val profile = profileRepo.addProfile(name, url, content)
         profileRepo.updateProfileContent(profile.id, content, parsed.proxies.size)
+        if (info.isNotEmpty()) {
+            profileRepo.updateProfileTraffic(
+                profile.id,
+                info["upload"] ?: 0L,
+                info["download"] ?: 0L,
+                info["total"] ?: 0L,
+                info["expire"] ?: 0L,
+            )
+        }
     }
 
     fun refreshSubscription(id: String) = viewModelScope.launch(Dispatchers.IO) {
         val profile = profiles.value.find { it.id == id } ?: return@launch
         if (profile.url.isBlank()) return@launch
-        val content = fetchUrl(profile.url) ?: return@launch
-        val parsed = SubscriptionParser.parse(content)
-        profileRepo.updateProfileContent(id, content, parsed.proxies.size)
-        if (settings.value.activeProfileId == id && VpnRuntime.running.value) {
+        val ok = com.clashlite.core.SubscriptionUpdater.refreshProfile(app, id, profile.url)
+        if (ok && settings.value.activeProfileId == id && VpnRuntime.running.value) {
             // 已连接状态下更新配置后重启内核
-            applyConfig(parsed)
+            val content = profileRepo.readProfileContent(id) ?: return@launch
+            applyConfig(SubscriptionParser.parse(content))
         }
     }
 
     fun deleteProfile(id: String) = viewModelScope.launch { profileRepo.deleteProfile(id) }
     fun setActiveProfile(id: String) = viewModelScope.launch { profileRepo.setActiveProfile(id) }
+
+    /** 订阅自动更新周期（小时，0=关闭） */
+    val autoUpdateHours: StateFlow<Int> = profileRepo.autoUpdateHours
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    fun setAutoUpdateHours(hours: Int) = viewModelScope.launch {
+        profileRepo.setAutoUpdateHours(hours)
+        com.clashlite.work.AutoUpdateWorker.schedule(app, hours)
+        // 设置后立即刷新一次
+        if (hours > 0) {
+            profiles.value.filter { it.url.isNotBlank() }.forEach {
+                launch(Dispatchers.IO) { com.clashlite.core.SubscriptionUpdater.refreshProfile(app, it.id, it.url) }
+            }
+        }
+    }
 
     private suspend fun applyConfig(parsed: ParsedSubscription) {
         val config = com.clashlite.core.ConfigGenerator.generate(parsed)

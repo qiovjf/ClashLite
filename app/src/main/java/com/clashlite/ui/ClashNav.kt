@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -52,6 +53,7 @@ fun ClashNav(vm: ClashViewModel) {
     val tabs = listOf(
         Tab("dashboard", "仪表盘", Icons.Filled.Dashboard),
         Tab("proxies", "代理", Icons.Filled.SwapHoriz),
+        Tab("connections", "连接", Icons.Filled.Lan),
         Tab("profiles", "订阅", Icons.Filled.Extension),
         Tab("theme", "主题", Icons.Filled.Palette),
         Tab("settings", "设置", Icons.Filled.Settings),
@@ -104,9 +106,10 @@ fun ClashNav(vm: ClashViewModel) {
                 startDestination = "dashboard",
                 modifier = contentModifier,
             ) {
-                composable("dashboard") { DashboardScreen(vm) }
-                composable("proxies") { ProxiesScreen(vm) }
-                composable("profiles") { ProfilesScreen(vm) }
+            composable("dashboard") { DashboardScreen(vm) }
+            composable("proxies") { ProxiesScreen(vm) }
+            composable("connections") { ConnectionsScreen(vm) }
+            composable("profiles") { ProfilesScreen(vm) }
                 composable("theme") { ThemeScreen(vm) }
                 composable("settings") { SettingsScreen(vm, onOpenCoreConfig = { navController.navigate("coreconfig") }) }
                 composable("coreconfig") { CoreConfigScreen(vm) { navController.popBackStack() } }

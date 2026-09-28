@@ -52,6 +52,26 @@ fun SettingsScreen(vm: ClashViewModel, onOpenCoreConfig: () -> Unit = {}) {
         Text("设置", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
 
+        // 订阅自动更新
+        val autoUpdateHours by vm.autoUpdateHours.collectAsStateWithLifecycle()
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("订阅自动更新", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0 to "关闭", 12 to "12 小时", 24 to "每天").forEach { (hours, label) ->
+                        FilterChip(
+                            selected = autoUpdateHours == hours,
+                            onClick = { vm.setAutoUpdateHours(hours) },
+                            label = { Text(label, fontSize = 12.sp) },
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // 基础配置入口
         Card(
             Modifier.fillMaxWidth().clickable(onClick = onOpenCoreConfig),

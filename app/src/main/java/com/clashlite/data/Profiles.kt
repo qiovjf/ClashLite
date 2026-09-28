@@ -13,6 +13,12 @@ data class Profile(
     val updatedAt: Long = createdAt,
     /** 节点数量，解析后更新 */
     val nodeCount: Int = 0,
+    /** 订阅用量信息（subscription-userinfo 头），字节 */
+    val upload: Long = 0,
+    val download: Long = 0,
+    val total: Long = 0,
+    /** 到期时间（epoch 秒），0 表示未知 */
+    val expire: Long = 0,
 )
 
 /** 分应用代理模式 */
